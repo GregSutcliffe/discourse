@@ -79,39 +79,19 @@ class ImportScripts::FLARUM < ImportScripts::Base
         photo = r["photo"]
         next unless photo.present?
 
-        puts "got: #{photo}"
-        next
-
         # Possible encoded values:
-        # 1. cf://uploads/userpics/820/Y0AFUQYYM6QN.jpg
-        # 2. ~cf/userpics2/cf566487133f1f538e02da96f9a16b18.jpg
-        # 3. ~cf/userpics/txkt8kw1wozn.jpg
+        # 1. tOVWVHpkF4E9mELz.png
 
-        photo_real_filename = nil
-        parts = photo.squeeze("/").split("/")
-        if parts[0] =~ /^[a-z0-9]{2}:/
-          photo_path = "#{ATTACHMENTS_BASE_DIR}/#{parts[2..-2].join("/")}".squeeze("/")
-        elsif parts[0] == "~cf"
-          photo_path = "#{ATTACHMENTS_BASE_DIR}/#{parts[1..-2].join("/")}".squeeze("/")
-        else
-          puts "UNKNOWN FORMAT: #{photo}"
-          next
-        end
+        photo_path = "#{ATTACHMENTS_BASE_DIR}/#{photo}"
 
         if !File.exist?(photo_path)
           puts "Path to avatar file not found! Skipping. #{photo_path}"
           next
         end
 
-        photo_real_filename = find_photo_file(photo_path, parts.last)
-        if photo_real_filename.nil?
-          puts "Couldn't find file for #{photo}. Skipping."
-          next
-        end
-
         print "."
 
-        upload = create_upload(u.id, photo_real_filename, File.basename(photo_real_filename))
+        upload = create_upload(u.id, photo_path, File.basename(photo_path))
         if upload.persisted?
           u.import_mode = false
           u.create_user_avatar
@@ -119,7 +99,7 @@ class ImportScripts::FLARUM < ImportScripts::Base
           u.user_avatar.update(custom_upload_id: upload.id)
           u.update(uploaded_avatar_id: upload.id)
         else
-          puts "Error: Upload did not persist for #{u.username} #{photo_real_filename}!"
+          puts "Error: Upload did not persist for #{u.username} #{photo_path}!"
         end
       end
     end
