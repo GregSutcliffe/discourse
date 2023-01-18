@@ -13,7 +13,7 @@ class ImportScripts::FLARUM < ImportScripts::Base
   BATCH_SIZE ||= 1000
   FLARUM_USER ||= ENV["FLARUM_USER"] || "db_user"
   FLARUM_PW ||= ENV["FLARUM_PW"] || "db_user_pass"
-  ATTACHMENTS_BASE_DIR = nil # "/absolute/path/to/attachments" set the absolute path if you have attachments
+  ATTACHMENTS_BASE_DIR ||= ENV["ATTACHMENTS_BASE_DIR"] || nil # "/absolute/path/to/attachments" set the absolute path if you have attachments
 
   def initialize
     super
