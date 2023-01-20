@@ -18,6 +18,8 @@ class ImportScripts::FLARUM < ImportScripts::Base
   def initialize
     super
 
+    @htmlentities = HTMLEntities.new
+
     @client =
       Mysql2::Client.new(
         host: FLARUM_HOST,
@@ -216,6 +218,80 @@ class ImportScripts::FLARUM < ImportScripts::Base
 
   def process_FLARUM_post(raw, import_id)
     s = raw.dup
+
+    s = @htmlentities.decode(s)
+
+    # no idea what <r/> is for... I think it's just wrapping the whole post...
+    s.gsub!(%r{</?r>}i, "")
+
+    # paragraph to newline
+    s.gsub!(%r{<p>}i, "")
+    s.gsub!(%r{</p>}i, "\n")
+
+    # Bold ->
+    # <STRONG><s>**</s>...<e>**</e></STRONG>
+    # <B><s>[b]</s>...<e>[/b]</e></B>
+    s.gsub!(%r{<STRONG><s>\*\*</s>(.*?)<e>\*\*</e></STRONG>}i) { "**#{$1}**" }
+    s.gsub!(%r{<B><s>\[b\]</s>(.*?)<e>\[/b\]</e></B>}i) { "**#{$1}**" }
+
+    # Italics ->
+    # <EM><s>_</s>...<e>_</e></EM>
+    # <I><s>[i]</s>...<e>[/i]</e></I>
+    s.gsub!(%r{<EM><s>_</s>(.*?)<e>_</e></EM>}i) { "*#{$1}*" }
+    s.gsub!(%r{<I><s>\[i\]</s>(.*?)<e>\[/i\]</e></I>}i) { "*#{$1}*" }
+
+    # Underline ->
+    # <U><s>[u]</s>...<e>[/u]</e></U>
+    s.gsub!(%r{<U><s>\[u\]</s>(.*?)<e>\[/u\]</e></U>}i) { "[u]#{$1}[/u]" }
+
+    # Strikethrough ->
+    # <S><s>[s]</s>...<e>[/s]</e></S>
+    s.gsub!(%r{<S><s>\[s\]</s>(.*?)<e>\[/s\]</e></S>}i) { "[s]#{$1}[/s]" }
+
+    # Inline Code -> <C><s>`</s>login<e>`</e></C>
+    s.gsub!(%r{<C><s>`</s>(.*?)<e>`</e></C>}i) { "`#{$1}`" }
+
+    # Codeblock -> <CODE><s>[code]</s>...<e>[/code]</e></CODE>
+    # Pre is also code -> [pre]...[/pre]
+    s.gsub!(%r{<CODE><s>\[code\]</s>(.*?)<e>\[/code\]</e></CODE>}i) { "[code]#{$1}[/code]" }
+    s.gsub!(%r{\[pre\](.*?)\[/pre\]}i) { "[code]#{$1}[/code]" }
+
+    # Headings -> <H3><s>### </s>...<e> </e></H3>
+    # sometimes the closing <e></e> is absent
+    s.gsub!(%r{<H3><s>### </s>}i, "### ")
+    s.gsub!(%r{(<e> </e>)?</H3>}i, "")
+
+    # URLS -> two forms
+    # <URL url=".1."><s>[</s>.2.<e>](...)</e></URL>
+    # <URL url=".1.">.2.</URL>
+    s.gsub!(%r{<URL url="(.+?)">(?:<s>.*?</s>)?(.+?)(<e>.*?</e>)?</URL>}i) { "[#{$2}](#{$1})" }
+
+    # Lists
+    # unordered <LIST><LI><s>- </s>...</LI><LI><s>- </s>...</LI><LI><s>- </s>...</LI></LIST>
+    # ordered <LIST type="decimal"><LI><s>1. </s>...</LI><LI><s>2. </s>...</LI><LI><s>3. </s>...</LI><LI><s>4. </s>...</LI></LIST>
+    s.gsub!(%r{<LIST>(.*?)</LIST>}m) { "[ul]#{$1}[/ul]" }
+    s.gsub!(%r{<LIST type="decimal">(.*?)</LIST>}m) { "[ol]#{$1}[/ol]" }
+    s.gsub!(%r{<LI><s>.*?</s>(.*?)</LI>}i) { "[li]#{$1}[/li]" }
+
+    # Quote -> <QUOTE><s>\n[quote]</s>...<e>[/quote]\n\n</e></QUOTE>
+    # safer to use a multiline quote than a ">"
+    s.gsub!(%r{<QUOTE><s>.*?</s>(.+?)<e>.*?</QUOTE>}im) { "[quote]\n#{$1}\n[/quote]" }
+
+    # Images -> <IMG src="..."><s>[img]</s>...<e>[/img]</e></IMG>
+    s.gsub!(%r{<IMG.*?</s>(.+?)<e>.*?</IMG>}im) { "[img]#{$1}[/img]" }
+
+    # unsupported things
+    # <SIZE size=".."><s>[size=..]</s>...<e>[/size]</e></SIZE><br/>
+    # <COLOR color=".."><s>[color=..]</s>...<e>[/color]</e></COLOR>
+    # <CENTER><s>[center]</s>...<e>[/center]</e></CENTER>
+    s.gsub!(%r{<SIZE.*?</s>(.*?)<e>.*?</SIZE>}im, '\1')
+    s.gsub!(%r{<COLOR.*?</s>(.*?)<e>.*?</COLOR>}im, '\1')
+    s.gsub!(%r{<CENTER.*?</s>(.*?)<e>.*?</CENTER>}im, '\1')
+
+
+
+    puts "After"
+    puts s
 
     s
   end
